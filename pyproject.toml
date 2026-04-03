@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "project-architecture-visualization"
+version = "0.1.0"
+description = "Scan TS/Python projects and generate architecture diagrams in D2+SVG"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "Project Architecture Visualization" }]
+dependencies = []
+
+[project.scripts]
+archviz = "archviz.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
