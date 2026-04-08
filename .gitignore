@@ -1,5 +1,6 @@
 .archviz/
 .archviz-test/
+.archviz-*/
 __pycache__/
 *.pyc
 .venv/

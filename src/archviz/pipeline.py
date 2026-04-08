@@ -11,6 +11,9 @@ from .extractors import (
     PythonExtractor,
     TypeScriptExtractor,
 )
+from .features.config import FeatureMap
+from .features import build_features
+from .features.models import FeatureBuildResult
 from .models import EvidenceRef, GraphBuilder, GraphIR, Node
 from .scanner import scan_project
 from .transforms import enrich_graph, summarize_graph
@@ -20,14 +23,16 @@ from .utils import normalize_rel_path
 @dataclass(slots=True)
 class PipelineResult:
     graph: GraphIR
+    features: FeatureBuildResult
     scan_summary: dict[str, int]
 
 
 class ArchitecturePipeline:
-    def run(self, root: Path) -> PipelineResult:
+    def run(self, root: Path, feature_map: FeatureMap | None = None) -> PipelineResult:
         root = root.resolve()
         scan = scan_project(root)
         service_roots = discover_service_roots(scan)
+        effective_feature_map = feature_map or FeatureMap()
 
         builder = GraphBuilder()
         context = ExtractionContext(root=root, scan=scan, graph=builder, service_roots=service_roots)
@@ -37,6 +42,7 @@ class ArchitecturePipeline:
 
         graph = builder.build(metadata={"project_root": root.as_posix()})
         graph = enrich_graph(graph)
+        feature_result = build_features(graph, feature_map=effective_feature_map)
 
         scan_summary = {
             "python_files": len(scan.python_files),
@@ -49,9 +55,16 @@ class ArchitecturePipeline:
             "php_files": len(scan.php_files),
             "ruby_files": len(scan.ruby_files),
             "containers": len(service_roots),
+            "features": len(feature_result.features),
+            "unassigned_modules": len(feature_result.unassigned_modules),
+            "feature_map_rules": len(effective_feature_map.features),
             **summarize_graph(graph),
         }
-        return PipelineResult(graph=graph, scan_summary=scan_summary)
+        return PipelineResult(
+            graph=graph,
+            features=feature_result,
+            scan_summary=scan_summary,
+        )
 
     def _seed_containers(self, context: ExtractionContext) -> None:
         for container_root in context.service_roots:

@@ -4,7 +4,14 @@ import argparse
 from pathlib import Path
 import sys
 
-from .io import write_graph_ir
+from .features import (
+    build_feature_views,
+    discover_feature_map_path,
+    feature_slug,
+    load_feature_map,
+    write_feature_docs,
+)
+from .io import write_feature_ir, write_graph_ir
 from .pipeline import ArchitecturePipeline
 from .renderers import render_view
 from .report import write_report
@@ -25,6 +32,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=".archviz",
         help="Output directory (default: .archviz)",
     )
+    parser.add_argument(
+        "--feature-map",
+        default=None,
+        help="Optional feature map config path (yaml/json)",
+    )
     return parser
 
 
@@ -40,11 +52,22 @@ def main(argv: list[str] | None = None) -> int:
     output_dir.mkdir(parents=True, exist_ok=True)
     views_dir = output_dir / "views"
     views_dir.mkdir(parents=True, exist_ok=True)
+    features_dir = output_dir / "features"
+    features_dir.mkdir(parents=True, exist_ok=True)
+
+    explicit_feature_map = Path(args.feature_map).resolve() if args.feature_map else None
+    feature_map = load_feature_map(project_dir, output_dir=output_dir, explicit_path=explicit_feature_map)
+    feature_map_path = discover_feature_map_path(
+        project_dir,
+        output_dir=output_dir,
+        explicit_path=explicit_feature_map,
+    )
 
     pipeline = ArchitecturePipeline()
-    result = pipeline.run(project_dir)
+    result = pipeline.run(project_dir, feature_map=feature_map)
 
     write_graph_ir(result.graph, output_dir / "architecture.ir.json")
+    write_feature_ir(result.features, output_dir / "feature.ir.json")
 
     container_view = build_container_view(result.graph)
     module_view = build_module_view(result.graph)
@@ -52,7 +75,15 @@ def main(argv: list[str] | None = None) -> int:
     container_render = render_view(container_view, views_dir)
     module_render = render_view(module_view, views_dir)
 
-    write_report(result.graph, output_dir / "report.md")
+    feature_views = build_feature_views(result.graph, result.features)
+    feature_renders = [
+        render_view(feature_view.view, features_dir / feature_slug(feature_view.feature_id))
+        for feature_view in feature_views
+    ]
+
+    write_feature_docs(result.features, output_dir, feature_map=feature_map)
+
+    write_report(result.graph, output_dir / "report.md", features=result.features)
 
     print("Architecture extraction complete")
     print(f"- Project: {project_dir}")
@@ -61,6 +92,13 @@ def main(argv: list[str] | None = None) -> int:
         print(f"- {key}: {value}")
     print(f"- D2: {container_render.d2_path}")
     print(f"- D2: {module_render.d2_path}")
+    print(f"- Feature docs: {output_dir / 'feature-index.md'}")
+    print(f"- Feature IR: {output_dir / 'feature.ir.json'}")
+    print(f"- Feature diagrams: {len(feature_renders)}")
+    if feature_map_path:
+        print(f"- Feature map: {feature_map_path}")
+    else:
+        print("- Feature map: not used")
     if container_render.svg_path:
         print(f"- SVG: {container_render.svg_path}")
     else:
@@ -69,6 +107,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"- SVG: {module_render.svg_path}")
     else:
         print("- SVG (module): skipped (d2 CLI missing or failed)")
+    feature_svg_count = sum(1 for render in feature_renders if render.svg_path)
+    if feature_renders and feature_svg_count != len(feature_renders):
+        print(f"- SVG (feature): {feature_svg_count}/{len(feature_renders)} rendered")
     return 0
 
 

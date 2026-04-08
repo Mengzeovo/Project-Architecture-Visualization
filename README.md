@@ -37,9 +37,9 @@
 2. **容器发现（Discover）**：自动识别服务/容器边界（无需手动指定入口）
 3. **事实提取（Extract）**：语言提取器 + 通用提取器提取关系
 4. **图归一化（Normalize）**：统一写入 Graph IR（节点/边/证据/置信度）
-5. **视图构建（View）**：生成容器视图、模块视图
+5. **视图构建（View）**：生成容器视图、模块视图、功能视图
 6. **渲染（Render）**：输出 D2，并在本机有 `d2` 时输出 SVG
-7. **报告（Report）**：输出低置信度边，便于人工校验
+7. **报告（Report）**：输出低置信度边和低置信功能归属，便于人工校验
 
 这套分层的意义是：
 
@@ -93,11 +93,17 @@
 默认输出目录为 `.archviz`，包含：
 
 - `architecture.ir.json`：统一图模型（节点、边、置信度、证据）
+- `feature.ir.json`：功能分组 IR（功能、模块归属、依赖、外部交互、证据）
+- `feature-index.md`：功能总览入口
 - `report.md`：摘要与低置信度关系清单
 - `views/container-view.d2`
 - `views/module-view.d2`
 - `views/container-view.svg`（若系统安装了 `d2`）
 - `views/module-view.svg`（若系统安装了 `d2`）
+- `features/<feature-id>/diagram.d2`
+- `features/<feature-id>/diagram.svg`（若系统安装了 `d2`）
+- `features/<feature-id>/design.md`
+- `features/<feature-id>/evidence.json`
 
 ---
 
@@ -128,6 +134,12 @@ archviz /path/to/project
 
 ```bash
 archviz /path/to/project --output /path/to/output
+```
+
+指定功能覆写配置：
+
+```bash
+archviz /path/to/project --feature-map /path/to/feature-map.yaml
 ```
 
 本地模块方式运行：
@@ -179,6 +191,7 @@ PYTHONPATH=src py -3 -m archviz.cli /path/to/project
 - `src/archviz/models.py`：Graph IR 与构图器
 - `src/archviz/transforms.py`：图增强与统计
 - `src/archviz/views.py`：视图构建
+- `src/archviz/features/`：Feature IR、分类、功能视图与文档输出
 - `src/archviz/renderers/d2.py`：D2/SVG 渲染
 - `src/archviz/report.py`：分析报告输出
 - `src/archviz/cli.py`：CLI 入口
